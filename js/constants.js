@@ -32,24 +32,21 @@ export const PANELS = {
 
 export const NON_DRAGGABLE_PANELS = ['map', 'tbpn'];
 
-// Live news streams - prefer stable channelId live embeds when possible
-// Default order: France 24, DW, NBC, Reuters (as requested)
+// Live news streams - using direct video IDs for reliability
+// Video IDs are more stable than channel-based embeds
 export const NEWS_STREAMS = [
-    { name: 'France 24', type: 'youtube-live-channel', channelId: 'UCQfwfsi5VrQ8yKZ-UWmAEFg' },
-    { name: 'DW News', type: 'youtube-live-channel', channelId: 'UCknLrEdhRCp1aegoMqRaCZg' },
-    { name: 'NBC News NOW', type: 'youtube-live-channel', channelId: 'UCeY0bbntWzzVIaj2z3QigXg' },
-    { name: 'Reuters', type: 'youtube-live-channel', channelId: 'UChqUTb7kYRX8-EiaN3XFrSQ' },
-    { name: 'Al Jazeera', type: 'youtube-live-channel', channelId: 'UCNye-wNBqNL5ZzHSJj3l8Bg' },
-    { name: 'Sky News', type: 'youtube-live-channel', channelId: 'UCoMdktPbSTixAyNGwb-UYkQ' },
-    { name: 'Euronews', type: 'youtube-live-channel', channelId: 'UCSrZ3UV4jOidv8ppoVuvW9Q' },
-    { name: 'ABC News', type: 'youtube-live-channel', channelId: 'UCBi2mrWuNuyYy4gbM6fU18Q' },
-    { name: 'CBS News', type: 'youtube-live-channel', channelId: 'UC8p1vwvWtl6T73JiExfWs1g' },
-    { name: 'AP News', type: 'youtube-live-channel', channelId: 'UC52X5wxOL_s5yw0dQk7NtgA' },
-    { name: 'BBC News', type: 'youtube-live-channel', channelId: 'UC16niRr50-MSBwiO3YDb3RA' },
-    { name: 'WION', type: 'youtube-live-channel', channelId: 'UC_gUM8rL-Lrg6O3adPW9K1g' },
-    { name: 'CGTN', type: 'youtube-live-channel', channelId: 'UCgrNz-aDmcr2uuto8_DL2jg' },
-    { name: 'NHK World', type: 'youtube-live-channel', channelId: 'UCQ3Ods3SAsLKPJ0D-MfjN2A' },
-    { name: 'Arirang', type: 'youtube-live-channel', channelId: 'UCu_2e6hsAqrGbJMmUPwk8Jw' }
+    { name: 'France 24', type: 'youtube', videoId: 'Ap-UM1O9RBU' },
+    { name: 'DW News', type: 'youtube', videoId: 'pqabxBKzZ6M' },
+    { name: 'Al Jazeera', type: 'youtube', videoId: 'gCNeDWCI0vo' },
+    { name: 'Sky News', type: 'youtube', videoId: 'YDvsBbKfLPA' },
+    { name: 'Euronews', type: 'youtube', videoId: 'pykpO5kQJ98' },
+    { name: 'CBS News', type: 'youtube', videoId: 'cHsoPLuzWeg' },
+    { name: 'CGTN', type: 'youtube', videoId: 'EBAhmCuHI04' },
+    { name: 'NBC News', type: 'youtube', videoId: 'Rn_bqhxu_cI' },
+    { name: 'ABC News', type: 'youtube', videoId: 'FnTtNwdRGHY' },
+    { name: 'Reuters', type: 'youtube', videoId: 'KFnZmDQdgsg' },
+    { name: 'BBC News', type: 'youtube', videoId: 'HYGmYKTsNQI' },
+    { name: 'AP News', type: 'youtube', videoId: '-upyPouRrB8' }
 ];
 
 // Map zoom settings
