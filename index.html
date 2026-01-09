@@ -1,423 +1,447 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Situation Monitor</title>
+    <title>QSINTEL Monitor</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css">
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 </head>
 <body>
+    <!-- Splash Screen -->
+    <div class="splash-screen" id="splashScreen">
+        <div class="splash-content">
+            <div class="splash-icon">📡</div>
+        <h1 class="splash-title">QSINTEL SITUATION MONITOR</h1>
+            <div class="splash-subtitle"><em>Originally by <a href="https://github.com/hipcityreg/situation-monitor" target="_blank" rel="noopener noreferrer">Reggie (hipcityreg)</a></em></div>
+            <div class="splash-loader"></div>
+            <div class="splash-status" id="splashStatus">Initializing...</div>
+        </div>
+    </div>
+
     <header class="header">
         <div class="header-left">
-            <h1 class="title">Situation Monitor</h1>
-            <span class="status" id="status">Ready</span>
+            <div class="title-block">
+                <h1 class="title">Quiet Sector Monitoring</h1>
+                <div class="title-subtitle"><em>Originally by <a href="https://github.com/hipcityreg/situation-monitor" target="_blank" rel="noopener noreferrer">Reggie (hipcityreg)</a></em></div>
+            </div>
+            <input type="text" id="globalSearch" class="search-box" placeholder="Search..." oninput="handleGlobalSearch(this.value)">
+            <div class="time-filter-wrapper">
+                <button class="header-btn time-filter-btn" onclick="toggleTimeFilter()" title="Filter by time">
+                    🕐
+                </button>
+                <div class="time-filter-dropdown" id="timeFilterDropdown">
+                    <button class="time-option active" data-time="all" onclick="setTimeFilter('all')">All Time</button>
+                    <button class="time-option" data-time="1h" onclick="setTimeFilter('1h')">Last Hour</button>
+                    <button class="time-option" data-time="6h" onclick="setTimeFilter('6h')">Last 6 Hours</button>
+                    <button class="time-option" data-time="12h" onclick="setTimeFilter('12h')">Last 12 Hours</button>
+                    <button class="time-option" data-time="24h" onclick="setTimeFilter('24h')">Last 24 Hours</button>
+                </div>
+            </div>
         </div>
         <div class="header-right">
-            <button class="refresh-btn monitors-btn" onclick="openMonitorForm()">+ Monitor</button>
-            <button class="settings-btn" onclick="toggleSettings()">Panels</button>
-            <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">Refresh</button>
+            <span class="status" id="status" title="">Ready</span>
+            <button class="header-btn" onclick="toggleAlerts()">Alerts</button>
+            <button class="header-btn" onclick="toggleSettings()">Settings</button>
+            <button class="header-btn refresh-btn" onclick="refreshAll()">Refresh <span class="countdown" id="countdown">5:00</span></button>
         </div>
     </header>
 
+    <nav class="tab-bar">
+        <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+        <button class="tab" data-tab="news" onclick="switchTab('news')">News</button>
+        <button class="tab" data-tab="intel" onclick="switchTab('intel')">Intel</button>
+        <button class="tab" data-tab="markets" onclick="switchTab('markets')">Markets</button>
+    </nav>
+
     <!-- Settings Modal -->
-    <div class="settings-modal" id="settingsModal" onclick="if(event.target === this) toggleSettings()">
+    <div class="settings-modal" id="settingsModal" onclick="if(event.target===this)toggleSettings()">
         <div class="settings-content">
-            <div class="settings-title">Panel Settings</div>
-            <div class="settings-section">
-                <div class="settings-section-title">Toggle Panels</div>
-                <div id="panelToggles"></div>
-            </div>
-            <div class="settings-section">
-                <div class="settings-section-title">Livestream URL</div>
-                <input type="text" id="livestreamUrl" class="settings-input" placeholder="YouTube URL (e.g. https://youtube.com/watch?v=...)" onchange="saveLivestreamUrl()">
-                <div class="settings-hint">Paste any YouTube video or livestream URL</div>
-            </div>
-            <div class="settings-section">
-                <div class="settings-section-title">Layout</div>
-                <div class="settings-hint" style="margin-bottom: 0.5rem;">Drag panel headers to reorder</div>
-                <button class="settings-reset" onclick="resetPanelOrder()">Reset Layout</button>
-            </div>
-            <div class="settings-section monitors-section">
-                <div class="settings-section-title">Custom Monitors</div>
-                <div class="settings-hint" style="margin-bottom: 0.5rem;">Track keywords with optional map locations</div>
-                <div class="monitors-list" id="monitorsList"></div>
-                <button class="add-monitor-btn" onclick="openMonitorForm()">+ Add Monitor</button>
-            </div>
-            <button class="settings-close" onclick="toggleSettings()">Close</button>
+            <h3 class="settings-title">Settings</h3>
+
+            <details class="settings-section" open>
+                <summary class="settings-section-title">Notifications</summary>
+                <div class="settings-section-body">
+                    <div class="panel-toggle-item">
+                        <span>Show headline popups</span>
+                        <div class="toggle-switch" id="notificationsToggle" onclick="toggleNotifications()"></div>
+                    </div>
+                </div>
+            </details>
+
+            <details class="settings-section" open>
+                <summary class="settings-section-title">Panels</summary>
+                <div class="settings-section-body">
+                    <div id="panelToggles"></div>
+                </div>
+            </details>
+
+            <details class="settings-section" open>
+                <summary class="settings-section-title">Live Stream Sources</summary>
+                <div class="settings-section-body">
+                    <div class="settings-hint">Customize the stream list used in the Live News panel. Supports YouTube video links/IDs, YouTube channel pages (opens externally), and general URLs.</div>
+                    <div id="streamSettings"></div>
+                    <div class="settings-row">
+                        <button class="settings-btn" id="addStreamBtn" type="button">Add Stream</button>
+                        <button class="settings-btn" id="resetStreamsBtn" type="button">Reset to Defaults</button>
+                    </div>
+                </div>
+            </details>
+
+            <button class="settings-btn primary" onclick="toggleSettings()">Close</button>
         </div>
     </div>
 
-    <!-- Monitor Form Modal -->
-    <div class="monitor-form-overlay" id="monitorFormOverlay" onclick="if(event.target === this) closeMonitorForm()">
-        <div class="monitor-form">
-            <div class="monitor-form-title" id="monitorFormTitle">Add Monitor</div>
-            <input type="hidden" id="monitorEditId">
-            <div class="monitor-form-field">
-                <label class="monitor-form-label">Name</label>
-                <input type="text" class="monitor-form-input" id="monitorName" placeholder="e.g., TSMC Supply Chain">
+    <!-- Article Reader Modal -->
+    <div class="article-modal" id="articleModal" onclick="if(event.target===this)closeArticle()">
+        <div class="article-container">
+            <div class="article-toolbar">
+                <button class="article-btn" onclick="closeArticle()">✕ Close</button>
+                <span class="article-url" id="articleUrl"></span>
+                <button class="article-btn" onclick="openArticleExternal()">Open External ↗</button>
             </div>
-            <div class="monitor-form-field">
-                <label class="monitor-form-label">Keywords</label>
-                <input type="text" class="monitor-form-input" id="monitorKeywords" placeholder="e.g., tsmc, taiwan semiconductor, chip">
-                <div class="monitor-form-hint">Comma-separated. Matches headlines containing any keyword.</div>
-            </div>
-            <div class="monitor-form-field">
-                <label class="monitor-form-label">Color</label>
-                <div class="monitor-form-colors" id="monitorColors"></div>
-            </div>
-            <div class="monitor-form-field">
-                <label class="monitor-form-label">Map Location (Optional)</label>
-                <div class="monitor-form-location">
-                    <input type="text" class="monitor-form-input" id="monitorLat" placeholder="Latitude">
-                    <input type="text" class="monitor-form-input" id="monitorLon" placeholder="Longitude">
-                </div>
-                <div class="monitor-form-hint">Leave blank for keyword-only monitoring. Add coords to show on map.</div>
-            </div>
-            <div class="monitor-form-actions">
-                <button class="monitor-cancel-btn" onclick="closeMonitorForm()">Cancel</button>
-                <button class="monitor-save-btn" onclick="saveMonitor()">Save</button>
+            <div class="article-content" id="articleContent">
+                <iframe id="articleFrame" class="article-webview" title="Article"></iframe>
             </div>
         </div>
     </div>
 
-    <main class="dashboard">
-        <!-- Global Intelligence Map -->
-        <section class="panel" data-panel="map" style="grid-column: span 4;">
-            <div class="panel-header">
-                <span class="panel-title">Global Activity Monitor</span>
-                <span class="panel-count" id="mapLegend">
-                    <span style="color: var(--green);">● Low</span>
-                    <span style="color: var(--yellow); margin-left: 0.5rem;">● Elevated</span>
-                    <span style="color: var(--red); margin-left: 0.5rem;">● High</span>
-                </span>
-            </div>
-            <div class="panel-content" id="mapPanel" style="max-height: none; height: 350px; overflow: hidden;">
-                <div class="loading-msg">Loading map...</div>
-            </div>
-        </section>
-
-        <!-- TBPN Livestream -->
-        <section class="panel panel-livestream" data-panel="tbpn">
-            <div class="panel-header">
-                <span class="panel-title">Livestream</span>
-                <span class="live-indicator">LIVE</span>
-            </div>
-            <div class="panel-content livestream-container" id="tbpnPanel">
-                <div class="loading-msg">Loading stream...</div>
-            </div>
-        </section>
-
-        <!-- Political / World News -->
-        <section class="panel" data-panel="politics">
-            <div class="panel-header">
-                <span class="panel-title">World / Geopolitical</span>
-                <span class="panel-count" id="politicsCount">-</span>
-            </div>
-            <div class="panel-content" id="politicsPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Technology News -->
-        <section class="panel" data-panel="tech">
-            <div class="panel-header">
-                <span class="panel-title">Technology / AI</span>
-                <span class="panel-count" id="techCount">-</span>
-            </div>
-            <div class="panel-content" id="techPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Financial News -->
-        <section class="panel" data-panel="finance">
-            <div class="panel-header">
-                <span class="panel-title">Financial</span>
-                <span class="panel-count" id="financeCount">-</span>
-            </div>
-            <div class="panel-content" id="financePanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Government / Policy -->
-        <section class="panel" data-panel="gov">
-            <div class="panel-header">
-                <span class="panel-title">Government / Policy</span>
-                <span class="panel-count" id="govCount">-</span>
-            </div>
-            <div class="panel-content" id="govPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Sector Heatmap -->
-        <section class="panel" data-panel="heatmap">
-            <div class="panel-header">
-                <span class="panel-title">Sector Heatmap</span>
-            </div>
-            <div class="panel-content" id="heatmapPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Markets -->
-        <section class="panel wide" data-panel="markets">
-            <div class="panel-header">
-                <span class="panel-title">Markets</span>
-                <span class="panel-count" id="marketsCount">-</span>
-            </div>
-            <div class="panel-content" id="marketsPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Commodities -->
-        <section class="panel" data-panel="commodities">
-            <div class="panel-header">
-                <span class="panel-title">Commodities / VIX</span>
-            </div>
-            <div class="panel-content" id="commoditiesPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Polymarket -->
-        <section class="panel wide" data-panel="polymarket">
-            <div class="panel-header">
-                <span class="panel-title">Polymarket Predictions</span>
-                <span class="panel-count" id="polymarketCount">-</span>
-            </div>
-            <div class="panel-content" id="polymarketPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Congressional Trading -->
-        <section class="panel" data-panel="congress">
-            <div class="panel-header">
-                <span class="panel-title">Congress Trades</span>
-                <span class="panel-count" id="congressCount">-</span>
-            </div>
-            <div class="panel-content" id="congressPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Whale Wallet Watch -->
-        <section class="panel" data-panel="whales">
-            <div class="panel-header">
-                <span class="panel-title">Whale Watch</span>
-                <span class="panel-count" id="whaleCount">-</span>
-            </div>
-            <div class="panel-content" id="whalePanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Main Character -->
-        <section class="panel" data-panel="mainchar">
-            <div class="panel-header">
-                <span class="panel-title">Main Character</span>
-                <span class="panel-count">Today</span>
-            </div>
-            <div class="panel-content" id="mainCharPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Money Printer -->
-        <section class="panel" data-panel="printer">
-            <div class="panel-header">
-                <span class="panel-title">Money Printer</span>
-                <span class="panel-count">Fed Balance Sheet</span>
-            </div>
-            <div class="panel-content" id="printerPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Government Contracts -->
-        <section class="panel wide" data-panel="contracts">
-            <div class="panel-header">
-                <span class="panel-title">Gov Contracts</span>
-                <span class="panel-count" id="contractsCount">-</span>
-            </div>
-            <div class="panel-content" id="contractsPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- AI Arms Race -->
-        <section class="panel wide" data-panel="ai">
-            <div class="panel-header">
-                <span class="panel-title">AI Arms Race</span>
-                <span class="panel-count" id="aiCount">-</span>
-            </div>
-            <div class="panel-content" id="aiPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Layoffs Tracker -->
-        <section class="panel" data-panel="layoffs">
-            <div class="panel-header">
-                <span class="panel-title">Layoffs Tracker</span>
-                <span class="panel-count" id="layoffsCount">-</span>
-            </div>
-            <div class="panel-content" id="layoffsPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Venezuela Situation -->
-        <section class="panel" data-panel="venezuela">
-            <div class="panel-header">
-                <span class="panel-title">Venezuela Situation</span>
-                <span class="panel-count" id="venezuelaStatus">-</span>
-            </div>
-            <div class="panel-content" id="venezuelaPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Greenland Situation -->
-        <section class="panel" data-panel="greenland">
-            <div class="panel-header">
-                <span class="panel-title">Greenland Situation</span>
-                <span class="panel-count" id="greenlandStatus">-</span>
-            </div>
-            <div class="panel-content" id="greenlandPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Intel Feed -->
-        <section class="panel wide" data-panel="intel">
-            <div class="panel-header">
-                <span class="panel-title">Intel Feed</span>
-                <span class="panel-count" id="intelCount">-</span>
-            </div>
-            <div class="panel-content" id="intelPanel">
-                <div class="loading-msg">Loading...</div>
-            </div>
-        </section>
-
-        <!-- Correlation Engine -->
-        <section class="panel wide" data-panel="correlation">
-            <div class="panel-header">
-                <span class="panel-title">Correlation Engine</span>
-                <span class="panel-count" id="correlationStatus">ANALYZING</span>
-            </div>
-            <div class="panel-content correlation-panel" id="correlationPanel">
-                <div class="correlation-sections">
-                    <div class="correlation-section">
-                        <div class="correlation-section-header">
-                            <span class="correlation-icon">🔮</span>
-                            <span class="correlation-section-title">Emerging Patterns</span>
-                        </div>
-                        <div class="correlation-content" id="emergingPatterns">
-                            <div class="loading-msg">Scanning for patterns...</div>
+    <!-- MAIN CONTENT AREA -->
+    <div class="main-content">
+        <!-- TOP ROW: Map (left 50%) + Live Streams (right 50%) -->
+        <div class="top-row">
+            <div class="top-left">
+                <div class="panel panel-map" data-panel="map">
+                    <div class="panel-header">
+                        <span class="panel-title" id="mapTitle">Global Map</span>
+                        <div class="region-buttons">
+                            <button class="region-btn active" data-region="all" onclick="setRegionFilter('all')">All</button>
+                            <button class="region-btn" data-region="us" onclick="setRegionFilter('us')">US</button>
+                            <button class="region-btn" data-region="europe" onclick="setRegionFilter('europe')">EU</button>
+                            <button class="region-btn" data-region="asia" onclick="setRegionFilter('asia')">Asia</button>
+                            <button class="region-btn" data-region="mideast" onclick="setRegionFilter('mideast')">ME</button>
+                            <button class="region-btn" data-region="russia" onclick="setRegionFilter('russia')">RU</button>
+                            <button class="region-btn" data-region="ukraine" onclick="setRegionFilter('ukraine')">UA</button>
                         </div>
                     </div>
-                    <div class="correlation-section">
-                        <div class="correlation-section-header">
-                            <span class="correlation-icon">📈</span>
-                            <span class="correlation-section-title">Momentum Signals</span>
-                        </div>
-                        <div class="correlation-content" id="momentumSignals">
-                            <div class="loading-msg">Calculating momentum...</div>
-                        </div>
+                    <div class="panel-content map-container" id="mapPanel"></div>
+                </div>
+            </div>
+            <div class="top-right">
+                <div class="panel panel-live" data-panel="tbpn">
+                    <div class="panel-header">
+                        <span class="panel-title">Live News</span>
+                        <span class="live-indicator">● LIVE</span>
                     </div>
-                    <div class="correlation-section">
-                        <div class="correlation-section-header">
-                            <span class="correlation-icon">🔗</span>
-                            <span class="correlation-section-title">Cross-Source Correlations</span>
-                        </div>
-                        <div class="correlation-content" id="crossSourceCorrelations">
-                            <div class="loading-msg">Correlating sources...</div>
-                        </div>
-                    </div>
-                    <div class="correlation-section">
-                        <div class="correlation-section-header">
-                            <span class="correlation-icon">⚡</span>
-                            <span class="correlation-section-title">Predictive Signals</span>
-                        </div>
-                        <div class="correlation-content" id="predictiveSignals">
-                            <div class="loading-msg">Generating predictions...</div>
-                        </div>
+                    <div class="stream-selector" id="streamSelector"></div>
+                    <div class="stream-container" id="streamContainer">
+                        <div class="loading-msg">Select streams below...</div>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <!-- Narrative Tracker -->
-        <section class="panel wide" data-panel="narrative">
-            <div class="panel-header">
-                <span class="panel-title">Narrative Tracker</span>
-                <span class="panel-count" id="narrativeStatus">TRACKING</span>
-            </div>
-            <div class="panel-content narrative-panel" id="narrativePanel">
-                <div class="narrative-sections">
-                    <div class="narrative-section">
-                        <div class="narrative-section-header">
-                            <span class="narrative-icon">🌱</span>
-                            <span class="narrative-section-title">Emerging Fringe</span>
-                        </div>
-                        <div class="narrative-content" id="emergingFringe">
-                            <div class="loading-msg">Scanning alternative sources...</div>
-                        </div>
-                    </div>
-                    <div class="narrative-section">
-                        <div class="narrative-section-header">
-                            <span class="narrative-icon">🔄</span>
-                            <span class="narrative-section-title">Fringe → Mainstream</span>
-                        </div>
-                        <div class="narrative-content" id="fringeToMainstream">
-                            <div class="loading-msg">Tracking crossover narratives...</div>
-                        </div>
-                    </div>
-                    <div class="narrative-section">
-                        <div class="narrative-section-header">
-                            <span class="narrative-icon">👁</span>
-                            <span class="narrative-section-title">Narrative Watch</span>
-                        </div>
-                        <div class="narrative-content" id="narrativeWatch">
-                            <div class="loading-msg">Monitoring active narratives...</div>
-                        </div>
-                    </div>
-                    <div class="narrative-section">
-                        <div class="narrative-section-header">
-                            <span class="narrative-icon">🎭</span>
-                            <span class="narrative-section-title">Disinfo Signals</span>
-                        </div>
-                        <div class="narrative-content" id="disinfoSignals">
-                            <div class="loading-msg">Analyzing signals...</div>
-                        </div>
+        <!-- BOTTOM: Tab Content -->
+        <div class="bottom-content">
+            <!-- DASHBOARD TAB - Only shows pinned panels -->
+            <div class="tab-content active" id="tab-dashboard">
+                <div class="content-grid pinned-panels" id="pinnedPanelsContainer">
+                    <div class="pinned-empty">
+                        <div style="font-size: 32px; margin-bottom: 12px;">○</div>
+                        <div style="font-size: 14px; color: var(--text-dim);">Pin panels from other tabs to show them here</div>
+                        <div style="font-size: 12px; color: var(--text-dim); margin-top: 8px;">Click the ○ icon on any panel to pin it</div>
                     </div>
                 </div>
             </div>
-        </section>
 
-        <!-- My Monitors -->
-        <section class="panel" data-panel="monitors">
-            <div class="panel-header">
-                <span class="panel-title">My Monitors</span>
-                <span class="panel-count" id="monitorsCount">-</span>
-            </div>
-            <div class="panel-content" id="monitorsPanel">
-                <div class="monitors-empty">
-                    No monitors configured
-                    <div class="monitors-empty-hint">Click Settings → Add Monitor to get started</div>
+            <!-- NEWS TAB -->
+            <div class="tab-content" id="tab-news">
+                <div class="content-grid">
+                    <section class="panel" data-panel="politics">
+                        <div class="panel-header">
+                            <span class="panel-title">Breaking News</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="politicsCount">-</span>
+                                <button class="panel-pin" data-panel="politics" onclick="togglePinPanel('politics')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="politicsPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="tech">
+                        <div class="panel-header">
+                            <span class="panel-title">Tech</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="techCount">-</span>
+                                <button class="panel-pin" data-panel="tech" onclick="togglePinPanel('tech')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="techPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="finance">
+                        <div class="panel-header">
+                            <span class="panel-title">Finance</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="financeCount">-</span>
+                                <button class="panel-pin" data-panel="finance" onclick="togglePinPanel('finance')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="financePanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="gov">
+                        <div class="panel-header">
+                            <span class="panel-title">Government</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="govCount">-</span>
+                                <button class="panel-pin" data-panel="gov" onclick="togglePinPanel('gov')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="govPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="world">
+                        <div class="panel-header">
+                            <span class="panel-title">World</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="worldCount">-</span>
+                                <button class="panel-pin" data-panel="world" onclick="togglePinPanel('world')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="worldPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="disasters">
+                        <div class="panel-header">
+                            <span class="panel-title">Disasters</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="disastersCount">-</span>
+                                <button class="panel-pin" data-panel="disasters" onclick="togglePinPanel('disasters')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="disastersPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="ai">
+                        <div class="panel-header">
+                            <span class="panel-title">AI</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="aiCount">-</span>
+                                <button class="panel-pin" data-panel="ai" onclick="togglePinPanel('ai')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="aiPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="layoffs">
+                        <div class="panel-header">
+                            <span class="panel-title">Layoffs</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="layoffsCount">-</span>
+                                <button class="panel-pin" data-panel="layoffs" onclick="togglePinPanel('layoffs')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="layoffsPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="cyber">
+                        <div class="panel-header">
+                            <span class="panel-title">Cyber</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="cyberCount">-</span>
+                                <button class="panel-pin" data-panel="cyber" onclick="togglePinPanel('cyber')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="cyberPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="social">
+                        <div class="panel-header">
+                            <span class="panel-title">Social</span>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="socialCount">-</span>
+                                <button class="panel-pin" data-panel="social" onclick="togglePinPanel('social')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="socialPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
                 </div>
             </div>
-        </section>
 
-    </main>
+            <!-- INTEL TAB -->
+            <div class="tab-content" id="tab-intel">
+                <div class="content-grid">
+                    <section class="panel" data-panel="intel">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Intel Feed</span>
+                                <span class="help-icon" data-help="Intel Feed pulls from intelligence-focused sources and renders a high-signal list. Items are tagged and prioritized so you can scan for time-sensitive developments, repeat themes, and regional relevance without reading full articles.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="intelCount">-</span>
+                                <button class="panel-pin" data-panel="intel" onclick="togglePinPanel('intel')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="intelPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="correlation">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Correlation Engine</span>
+                                <span class="help-icon" data-help="Correlation Engine scans all headlines and matches them against predefined topic patterns. It counts mentions per topic, tracks momentum by comparing counts to ~10 minutes ago, flags cross-source coverage (3+ different sources), and computes a simple predictive score based on volume, source diversity, and acceleration.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <button class="panel-pin" data-panel="correlation" onclick="togglePinPanel('correlation')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="correlationPanel">
+                            <div class="intel-grid">
+                                <div class="intel-section"><div class="intel-header">Patterns</div><div id="emergingPatterns"><div class="loading-msg">Analyzing...</div></div></div>
+                                <div class="intel-section"><div class="intel-header">Momentum</div><div id="momentumSignals"><div class="loading-msg">Analyzing...</div></div></div>
+                                <div class="intel-section"><div class="intel-header">Cross-Source</div><div id="crossSourceCorrelations"><div class="loading-msg">Analyzing...</div></div></div>
+                                <div class="intel-section"><div class="intel-header">Predictive</div><div id="predictiveSignals"><div class="loading-msg">Analyzing...</div></div></div>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="panel" data-panel="narrative">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Narrative Tracker</span>
+                                <span class="help-icon" data-help="Narrative Tracker matches headlines to narrative keyword sets. It classifies where a narrative is showing up (fringe/alternative/mainstream sources), ranks by mention volume, and flags narratives that appear in both fringe and mainstream as crossover. It also highlights known disinfo-pattern narratives separately.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <button class="panel-pin" data-panel="narrative" onclick="togglePinPanel('narrative')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="narrativePanel">
+                            <div class="intel-grid">
+                                <div class="intel-section"><div class="intel-header">Emerging</div><div id="emergingFringe"><div class="loading-msg">Analyzing...</div></div></div>
+                                <div class="intel-section"><div class="intel-header">Crossover</div><div id="fringeToMainstream"><div class="loading-msg">Analyzing...</div></div></div>
+                                <div class="intel-section"><div class="intel-header">Watch</div><div id="narrativeWatch"><div class="loading-msg">Analyzing...</div></div></div>
+                                <div class="intel-section"><div class="intel-header">Disinfo</div><div id="disinfoSignals"><div class="loading-msg">Analyzing...</div></div></div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
 
-    <!-- Load the modular JavaScript -->
+            <!-- MARKETS TAB -->
+            <div class="tab-content" id="tab-markets">
+                <div class="content-grid markets-layout">
+                    <section class="panel" data-panel="markets">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Markets</span>
+                                <span class="help-icon" data-help="Markets is a compact price board: it renders the latest fetched price plus the % change for major instruments. It’s meant as a quick risk-on/risk-off read to compare market moves against the news flow.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="marketsCount">-</span>
+                                <button class="panel-pin" data-panel="markets" onclick="togglePinPanel('markets')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="marketsPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="heatmap">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Sector Heatmap</span>
+                                <span class="help-icon" data-help="Sector Heatmap renders sectors as tiles colored by their % change. It’s a fast way to see leadership/weakness and sector rotation without reading a full chart.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <button class="panel-pin" data-panel="heatmap" onclick="togglePinPanel('heatmap')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="heatmapPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="commodities">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Commodities</span>
+                                <span class="help-icon" data-help="Commodities shows key commodity and volatility prices with their % change (same visual format as Markets). It helps you spot macro stress and supply-shock signals quickly.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <button class="panel-pin" data-panel="commodities" onclick="togglePinPanel('commodities')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="commoditiesPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="polymarket">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Polymarket</span>
+                                <span class="help-icon" data-help="Polymarket lists prediction markets with the current YES probability and volume. Think of it as a crowd-implied probability snapshot, useful for seeing where expectations are moving.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="polymarketCount">-</span>
+                                <button class="panel-pin" data-panel="polymarket" onclick="togglePinPanel('polymarket')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="polymarketPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="congress">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Congress Trades</span>
+                                <span class="help-icon" data-help="Congress Trades renders recently disclosed transactions (who, what ticker, buy/sell, and reported amount). It’s a lead generator for investigation, not a recommendation.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="congressCount">-</span>
+                                <button class="panel-pin" data-panel="congress" onclick="togglePinPanel('congress')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="congressPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="whales">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Whale Watch</span>
+                                <span class="help-icon" data-help="Whale Watch lists large crypto transfers detected recently, including estimated USD value and a transaction reference. It’s useful to confirm whether big moves are supported by real flow.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="whaleCount">-</span>
+                                <button class="panel-pin" data-panel="whales" onclick="togglePinPanel('whales')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="whalePanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="contracts">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <span class="panel-title">Gov Contracts</span>
+                                <span class="help-icon" data-help="Gov Contracts lists recent contract awards with agency, vendor, short description, and formatted award size. It helps you spot spending themes and procurement shifts quickly.">?</span>
+                            </div>
+                            <div class="panel-header-actions">
+                                <span class="panel-count" id="contractsCount">-</span>
+                                <button class="panel-pin" data-panel="contracts" onclick="togglePinPanel('contracts')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="contractsPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                    <section class="panel" data-panel="printer">
+                        <div class="panel-header">
+                            <span class="panel-title">Money Printer</span>
+                            <div class="panel-header-actions">
+                                <button class="panel-pin" data-panel="printer" onclick="togglePinPanel('printer')" title="Pin to dashboard">○</button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="printerPanel"><div class="loading-msg">Loading...</div></div>
+                    </section>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Ticker -->
+    <footer class="news-ticker" id="newsTicker">
+        <div class="ticker-label">BREAKING</div>
+        <div class="ticker-content"><div class="ticker-track" id="tickerTrack"></div></div>
+    </footer>
+
+    <!-- Notification Container (bottom right popups) -->
+    <div class="notification-container" id="notificationContainer"></div>
+
+    <!-- Hidden panels -->
+    <div style="display:none">
+        <div id="mainCharPanel"></div><div id="venezuelaPanel"></div><div id="greenlandPanel"></div><div id="monitorsPanel"></div>
+    </div>
+
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

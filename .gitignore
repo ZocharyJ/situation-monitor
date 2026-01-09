@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Local archives / scratch
+archive/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Optional: cache / temp
+*.log
+*.tmp
+
+# Env / local overrides
+.env
+.env.*
+
+# Package manager lock (optional if you don't want it committed)
+package-lock.json
+
+# If you ever add builds later
+/dist/
+/build/
