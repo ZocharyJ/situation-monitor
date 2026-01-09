@@ -51,6 +51,8 @@ import {
 let alertsEnabled = localStorage.getItem('alertsEnabled') === 'true';
 let seenAlerts = new Set(JSON.parse(localStorage.getItem('seenAlerts') || '[]'));
 
+let hasShownNotificationPermissionHint = false;
+
 // Toggle desktop notifications
 function toggleAlerts() {
     alertsEnabled = !alertsEnabled;
@@ -62,8 +64,13 @@ function toggleAlerts() {
         btn.title = alertsEnabled ? 'Alerts ON - Click to disable' : 'Alerts OFF - Click to enable';
     }
     
-    if (alertsEnabled && Notification.permission !== 'granted') {
-        Notification.requestPermission();
+    if (alertsEnabled) {
+        if (!('Notification' in window)) {
+            setStatus('Desktop notifications not supported in this environment');
+        } else if (Notification.permission !== 'granted') {
+            // Most browsers require this to be called from a user gesture.
+            Notification.requestPermission().catch(() => {});
+        }
     }
     
     setStatus(alertsEnabled ? 'Alerts enabled' : 'Alerts disabled');
@@ -71,7 +78,15 @@ function toggleAlerts() {
 
 // Check for alert-worthy news and send notification
 function checkForAlerts(news) {
-    if (!alertsEnabled || Notification.permission !== 'granted') return;
+    if (!alertsEnabled) return;
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') {
+        if (!hasShownNotificationPermissionHint) {
+            setStatus('Desktop notifications blocked — click Alerts to allow');
+            hasShownNotificationPermissionHint = true;
+        }
+        return;
+    }
     
     const criticalKeywords = ['breaking', 'missile', 'attack', 'invasion', 'nuclear', 'war', 'emergency', 'assassination', 'crash', 'explosion'];
     
@@ -86,7 +101,6 @@ function checkForAlerts(news) {
             seenAlerts.add(id);
             new Notification('⚠️ Alert: ' + item.source, {
                 body: item.title,
-                icon: '🚨',
                 tag: id
             });
         }
@@ -162,15 +176,17 @@ function checkForNewHeadlines(news) {
     if (!notificationsEnabled) return;
     
     // Check for new headlines not seen before
-    const newItems = news.filter(item => {
+    const newItemsAll = news.filter(item => {
         const id = item.title?.substring(0, 50);
         if (!id || seenHeadlines.has(id)) return false;
         seenHeadlines.add(id);
         return true;
-    }).slice(0, 3); // Max 3 new notifications per refresh
+    });
+
+    const newItemsForPopup = newItemsAll.slice(0, 3); // Max 3 in-app popups per refresh
     
     // Show notifications with slight delay between each
-    newItems.forEach((item, i) => {
+    newItemsForPopup.forEach((item, i) => {
         setTimeout(() => showHeadlineNotification(item), i * 500);
     });
     
@@ -180,6 +196,8 @@ function checkForNewHeadlines(news) {
         seenHeadlines = new Set(arr.slice(-200));
     }
     localStorage.setItem('seenHeadlines', JSON.stringify(Array.from(seenHeadlines)));
+
+    return newItemsAll;
 }
 
 // Expose to window
@@ -788,24 +806,33 @@ async function refreshAll() {
         if (isPanelEnabled('polymarket')) renderPolymarket(polymarket);
         if (isPanelEnabled('printer')) renderMoneyPrinter(fedBalance);
 
-        // Store all news for region filtering
+        // Store all news for region/time filtering
         lastAllNews = allNews;
         lastEarthquakes = earthquakes;
 
+        // Apply the current filters for UI + notifications so popups match what's visible.
+        const filteredForUi = filterNewsByTime(filterNewsByRegion(allNews, currentRegionFilter));
+
         // Render breaking news ticker
-        renderNewsTicker(allNews);
+        renderNewsTicker(filteredForUi);
+
+        // Ensure panels match current region/time filters (if user has set them)
+        renderFilteredNews();
         
-        // Check for new headlines and show notifications
-        checkForNewHeadlines(allNews);
+        // Check for new headlines and show in-app notifications
+        const newItems = checkForNewHeadlines(filteredForUi) || [];
+
+        // Desktop notifications only for alert-worthy NEW items
+        checkForAlerts(newItems);
 
         // Render map with earthquakes and shipping alert data
         if (isPanelEnabled('map')) {
             updateSplash('Rendering map...');
-            const activityData = analyzeHotspotActivity(allNews);
+            const activityData = analyzeHotspotActivity(filteredForUi);
             await renderGlobalMap(
                 activityData,
                 earthquakes,
-                allNews,
+                filteredForUi,
                 mapLayers,
                 getMonitorHotspots,
                 fetchFlightData,
@@ -814,17 +841,17 @@ async function refreshAll() {
             );
         }
         if (isPanelEnabled('mainchar')) {
-            const mainCharRankings = calculateMainCharacter(allNews);
+            const mainCharRankings = calculateMainCharacter(filteredForUi);
             renderMainCharacter(mainCharRankings);
         }
 
         if (isPanelEnabled('correlation')) {
-            const correlations = analyzeCorrelations(allNews);
+            const correlations = analyzeCorrelations(filteredForUi);
             renderCorrelationEngine(correlations);
         }
 
         if (isPanelEnabled('narrative')) {
-            const narratives = analyzeNarratives(allNews);
+            const narratives = analyzeNarratives(filteredForUi);
             renderNarrativeTracker(narratives);
         }
 
