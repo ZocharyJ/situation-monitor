@@ -419,15 +419,30 @@ function renderStreamEmbed(stream, index = 0) {
     // YouTube live stream by channelId
     if (stream.type === 'youtube-live-channel' && stream.channelId) {
         const livePageUrl = `https://www.youtube.com/channel/${stream.channelId}/live`;
-        // Use privacy-enhanced embed with minimal parameters
-        const embedUrl = `${ytHost}/embed/live_stream?channel=${stream.channelId}&autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1`;
         
+        // Check if we have a cached video ID - use direct embed if so
+        const cached = liveVideoIdCache.get(stream.channelId);
+        if (cached && cached.videoId) {
+            const embedUrl = `${ytHost}/embed/${cached.videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1${originParam}`;
+            return `
+                <div class="stream-embed-wrapper" data-yt-channel-id="${stream.channelId}">
+                    <iframe src="${embedUrl}" title="${stream.name || 'Live stream'}" loading="eager" referrerpolicy="no-referrer" frameborder="0" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                    <div class="stream-fallback">
+                        <span>Stream not loading?</span>
+                        <a href="${livePageUrl}" target="_blank" rel="noopener" class="stream-fallback-link">Watch on YouTube ↗</a>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // No cached video ID - show loading state with external link, then resolve in background
         return `
-            <div class="stream-embed-wrapper" data-yt-channel-id="${stream.channelId}">
-                <iframe data-yt-live-channel-id="${stream.channelId}" src="${embedUrl}" title="${stream.name || 'Live stream'}" loading="eager" referrerpolicy="no-referrer" frameborder="0" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-                <div class="stream-fallback">
-                    <span>Stream not loading?</span>
-                    <a href="${livePageUrl}" target="_blank" rel="noopener" class="stream-fallback-link">Watch on YouTube ↗</a>
+            <div class="stream-embed-wrapper stream-loading" data-yt-channel-id="${stream.channelId}">
+                <div class="stream-resolving">
+                    <div class="stream-resolving-icon">📺</div>
+                    <div class="stream-resolving-name">${stream.name}</div>
+                    <div class="stream-resolving-status">Finding live stream...</div>
+                    <a href="${livePageUrl}" target="_blank" rel="noopener" class="external-stream-btn">Watch on YouTube ↗</a>
                 </div>
             </div>
         `;
@@ -605,35 +620,67 @@ async function resolveLiveVideoIdForChannel(channelId) {
     const liveUrl = `https://www.youtube.com/channel/${channelId}/live`;
     const html = await fetchTextViaProxies(liveUrl);
     const videoId = extractFirstYouTubeVideoIdFromHtml(html);
-    if (videoId) {
-        liveVideoIdCache.set(channelId, { videoId, ts: now });
-    }
+    // Cache even if null to avoid repeated failed requests
+    liveVideoIdCache.set(channelId, { videoId: videoId || null, ts: now });
     return videoId;
 }
 
 function hydrateYouTubeLiveEmbeds(rootEl) {
     if (!rootEl) return;
-    const iframes = rootEl.querySelectorAll('iframe[data-yt-live-channel-id]');
-    if (!iframes.length) return;
-
-    iframes.forEach((iframe) => {
-        const channelId = iframe.getAttribute('data-yt-live-channel-id');
+    
+    // Find loading stream wrappers that need resolution
+    const loadingWrappers = rootEl.querySelectorAll('.stream-embed-wrapper.stream-loading[data-yt-channel-id]');
+    
+    loadingWrappers.forEach((wrapper) => {
+        const channelId = wrapper.getAttribute('data-yt-channel-id');
         if (!channelId) return;
-        if (iframe.getAttribute('data-yt-live-resolved') === '1') return;
-        iframe.setAttribute('data-yt-live-resolved', '1');
+        if (wrapper.getAttribute('data-yt-resolving') === '1') return;
+        wrapper.setAttribute('data-yt-resolving', '1');
 
-        // Resolve in background; if we find a concrete videoId, swap to /embed/<videoId>.
+        const ytHost = 'https://www.youtube-nocookie.com';
+        const livePageUrl = `https://www.youtube.com/channel/${channelId}/live`;
+        const streamName = wrapper.querySelector('.stream-resolving-name')?.textContent || 'Live stream';
+
+        // Resolve in background; if we find a concrete videoId, replace with iframe
         resolveLiveVideoIdForChannel(channelId)
             .then((videoId) => {
-                if (!videoId) return;
+                if (!videoId) {
+                    // No live stream found - show external link
+                    wrapper.innerHTML = `
+                        <div class="stream-external">
+                            <div class="external-stream-icon">📺</div>
+                            <div class="external-stream-name">${streamName}</div>
+                            <div class="external-stream-note">No live stream currently available</div>
+                            <a href="${livePageUrl}" target="_blank" rel="noopener" class="external-stream-btn">Check on YouTube ↗</a>
+                        </div>
+                    `;
+                    wrapper.classList.remove('stream-loading');
+                    return;
+                }
                 const originParam = (typeof location !== 'undefined' && location.origin)
                     ? `&origin=${encodeURIComponent(location.origin)}`
                     : '';
-                const desired = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0${originParam}`;
-                if (iframe.src === desired) return;
-                iframe.src = desired;
+                const embedUrl = `${ytHost}/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1${originParam}`;
+                wrapper.innerHTML = `
+                    <iframe src="${embedUrl}" title="${streamName}" loading="eager" referrerpolicy="no-referrer" frameborder="0" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                    <div class="stream-fallback">
+                        <span>Stream not loading?</span>
+                        <a href="${livePageUrl}" target="_blank" rel="noopener" class="stream-fallback-link">Watch on YouTube ↗</a>
+                    </div>
+                `;
+                wrapper.classList.remove('stream-loading');
             })
-            .catch(() => {});
+            .catch(() => {
+                wrapper.innerHTML = `
+                    <div class="stream-external">
+                        <div class="external-stream-icon">📺</div>
+                        <div class="external-stream-name">${streamName}</div>
+                        <div class="external-stream-note">Could not load stream</div>
+                        <a href="${livePageUrl}" target="_blank" rel="noopener" class="external-stream-btn">Watch on YouTube ↗</a>
+                    </div>
+                `;
+                wrapper.classList.remove('stream-loading');
+            });
     });
 }
 

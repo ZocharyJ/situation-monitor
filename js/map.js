@@ -44,9 +44,9 @@ let currentView = 'global';
 const REGIONS = {
     'global': { center: [20, 0], zoom: 2, title: 'GLOBAL ACTIVITY MONITOR', bounds: null }, // No flights on global
     'us': { center: [39, -98], zoom: 4, title: 'UNITED STATES', bounds: { north: 49.5, south: 24.5, west: -125, east: -66 } },
-    'europe': { center: [54, 15], zoom: 4, title: 'EUROPE', bounds: { north: 71, south: 35, west: -11, east: 40 } },
+    'europe': { center: [54, 15], zoom: 4, title: 'EUROPE', bounds: { north: 71, south: 35, west: -11, east: 45 } }, // Extended east to include Baltics, Finland, eastern Europe
     'asia': { center: [25, 105], zoom: 3, title: 'ASIA-PACIFIC', bounds: { north: 53, south: 5, west: 70, east: 150 } },
-    'russia': { center: [60, 80], zoom: 3, title: 'RUSSIA & EURASIA', bounds: { north: 75, south: 41, west: 19, east: 170 } },
+    'russia': { center: [60, 80], zoom: 3, title: 'RUSSIA & EURASIA', bounds: { north: 75, south: 41, west: 37, east: 170 } }, // Moved west bound to Russian border (excludes EU states)
     'mideast': { center: [29, 42], zoom: 5, title: 'MIDDLE EAST', bounds: { north: 42, south: 12, west: 25, east: 63 } },
     'ukraine': { center: [48.5, 35], zoom: 6, title: 'UKRAINE CONFLICT ZONE', bounds: { north: 52.5, south: 44.3, west: 22, east: 40.5 } },
     'taiwan': { center: [24, 121], zoom: 6, title: 'TAIWAN STRAIT', bounds: { north: 26, south: 21.5, west: 118, east: 124 } }
