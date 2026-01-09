@@ -631,6 +631,7 @@ export function renderNewsTicker(allNews) {
         const group = {
             representative: item,
             sources: new Set([item.source]),
+            sourceItems: [{ source: item.source, link: item.link, title: item.title }], // Store all sources with links
             count: 1
         };
         processed.add(index);
@@ -642,6 +643,7 @@ export function renderNewsTicker(allNews) {
             
             if (isSimilarStory(item.title, other.title)) {
                 group.sources.add(other.source);
+                group.sourceItems.push({ source: other.source, link: other.link, title: other.title });
                 group.count++;
                 processed.add(otherIndex);
             }
@@ -673,16 +675,34 @@ export function renderNewsTicker(allNews) {
     }
 
     // Build the ticker content once
-    const tickerContent = trendingStories.map(group => {
+    // Store source data globally for popup access
+    window._tickerSourceData = window._tickerSourceData || {};
+    const tickerContent = trendingStories.map((group, idx) => {
         const item = group.representative;
         const isTrending = group.count >= 2;
         const sourceCount = group.count > 1 ? ` (${group.count} sources)` : '';
-        return `
-            <a href="${item.link}" target="_blank" rel="noopener" class="ticker-item ${isTrending ? 'ticker-trending' : ''}">
-                <span class="ticker-source">${item.source || 'News'}${sourceCount}</span>
-                ${escapeHtml(item.title)}
-            </a>
-        `;
+        const storyId = `ticker-story-${idx}`;
+        
+        // Store source data for popup
+        window._tickerSourceData[storyId] = group.sourceItems;
+        
+        if (group.count > 1) {
+            // Multi-source: show popup on click
+            return `
+                <span class="ticker-item ticker-multi ${isTrending ? 'ticker-trending' : ''}" data-story-id="${storyId}" onclick="showTickerSourcesPopup(event, '${storyId}')">
+                    <span class="ticker-source">${item.source || 'News'}${sourceCount}</span>
+                    ${escapeHtml(item.title)}
+                </span>
+            `;
+        } else {
+            // Single source: direct link
+            return `
+                <a href="${item.link}" target="_blank" rel="noopener" class="ticker-item">
+                    <span class="ticker-source">${item.source || 'News'}</span>
+                    ${escapeHtml(item.title)}
+                </a>
+            `;
+        }
     }).join('<span class="ticker-separator">•</span>');
     
     // Duplicate content for seamless infinite scroll
@@ -690,9 +710,10 @@ export function renderNewsTicker(allNews) {
     tickerTrack.innerHTML = tickerContent + '<span class="ticker-separator">•</span>' + tickerContent;
     
     // Reset animation to ensure seamless scroll from start
+    // Remove inline style to let CSS class control the animation (allows :hover pause to work)
     tickerTrack.style.animation = 'none';
     tickerTrack.offsetHeight; // Trigger reflow
-    tickerTrack.style.animation = 'ticker-scroll 60s linear infinite';
+    tickerTrack.style.animation = ''; // Clear inline style, let CSS take over
 }
 
 // Render Cyber Threats panel
@@ -766,3 +787,64 @@ export function renderSocialTrends(items) {
 
     count.textContent = items.length;
 }
+
+// Show popup with all sources for a multi-source ticker story
+export function showTickerSourcesPopup(event, storyId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const sources = window._tickerSourceData?.[storyId];
+    if (!sources || sources.length === 0) return;
+    
+    // Remove any existing popup
+    const existing = document.getElementById('ticker-sources-popup');
+    if (existing) existing.remove();
+    
+    // Create popup
+    const popup = document.createElement('div');
+    popup.id = 'ticker-sources-popup';
+    popup.className = 'ticker-sources-popup';
+    popup.innerHTML = `
+        <div class="popup-header">
+            <span class="popup-title">📰 ${sources.length} Sources</span>
+            <button class="popup-close" onclick="closeTickerSourcesPopup()">&times;</button>
+        </div>
+        <div class="popup-sources">
+            ${sources.map(s => `
+                <a href="${s.link}" target="_blank" rel="noopener" class="popup-source-item">
+                    <span class="popup-source-name">${escapeHtml(s.source)}</span>
+                    <span class="popup-source-title">${escapeHtml(s.title)}</span>
+                </a>
+            `).join('')}
+        </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Position popup near the click
+    const rect = event.target.getBoundingClientRect();
+    popup.style.left = Math.min(rect.left, window.innerWidth - 320) + 'px';
+    popup.style.bottom = (window.innerHeight - rect.top + 10) + 'px';
+    
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', closeTickerSourcesPopupOnOutside);
+    }, 10);
+}
+
+function closeTickerSourcesPopupOnOutside(e) {
+    const popup = document.getElementById('ticker-sources-popup');
+    if (popup && !popup.contains(e.target)) {
+        closeTickerSourcesPopup();
+    }
+}
+
+export function closeTickerSourcesPopup() {
+    const popup = document.getElementById('ticker-sources-popup');
+    if (popup) popup.remove();
+    document.removeEventListener('click', closeTickerSourcesPopupOnOutside);
+}
+
+// Expose popup functions globally
+window.showTickerSourcesPopup = showTickerSourcesPopup;
+window.closeTickerSourcesPopup = closeTickerSourcesPopup;

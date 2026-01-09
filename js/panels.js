@@ -59,6 +59,7 @@ function isValidStreamObject(obj) {
     if (obj.type === 'youtube-channel') return typeof obj.channelUrl === 'string' && obj.channelUrl.trim().length > 0;
     if (obj.type === 'youtube-live-channel') return typeof obj.channelId === 'string' && obj.channelId.trim().length > 0;
     if (obj.type === 'youtube-page') return typeof obj.pageUrl === 'string' && obj.pageUrl.trim().length > 0;
+    if (obj.type === 'hls') return typeof obj.url === 'string' && obj.url.trim().length > 0;
     if (obj.type === 'external') return typeof obj.url === 'string' && obj.url.trim().length > 0;
     return false;
 }
@@ -133,6 +134,11 @@ function inferStreamFromUrl(name, rawUrl) {
     const url = (rawUrl || '').trim();
     const streamName = (name || '').trim() || 'Stream';
     if (!url) return null;
+
+    // HLS stream URLs (.m3u8)
+    if (/\.m3u8($|\?)/i.test(url)) {
+        return { name: streamName, type: 'hls', url };
+    }
 
     // Prefer extracting a direct video ID first.
     const videoId = extractYouTubeId(url);
@@ -230,6 +236,9 @@ function getStreamSettingsRows() {
         }
         if (s.type === 'youtube-page' && s.pageUrl) {
             return { name: s.name, url: s.pageUrl };
+        }
+        if (s.type === 'hls' && s.url) {
+            return { name: s.name, url: s.url };
         }
         if (s.type === 'external' && s.url) {
             return { name: s.name, url: s.url };
@@ -416,6 +425,12 @@ function renderStreamEmbed(stream) {
     // Default to privacy-enhanced embeds (avoids consent prompts in some browsers).
     const ytHost = 'https://www.youtube-nocookie.com';
 
+    // HLS streams - use video element with hls.js (most reliable for news)
+    if (stream.type === 'hls' && stream.url) {
+        const streamId = `hls-${btoa(stream.url).slice(0, 8)}`;
+        return `<video id="${streamId}" class="hls-stream" data-hls-src="${stream.url}" autoplay muted playsinline controls style="width:100%;height:100%;background:#000;object-fit:contain;"></video>`;
+    }
+
     // YouTube live stream by channelId (official embed URL)
     if (stream.type === 'youtube-live-channel' && stream.channelId) {
         const embedUrl = `${ytHost}/embed/live_stream?channel=${stream.channelId}&autoplay=1&mute=1&playsinline=1&rel=0${originParam}`;
@@ -547,9 +562,45 @@ function renderStreamTiles() {
         }).join('')}
     </div>`;
 
-    // After the DOM is updated, opportunistically resolve channel live streams to a concrete video ID.
-    // This can recover channels where /embed/live_stream fails but /embed/<videoId> works.
+    // After the DOM is updated, initialize HLS streams and resolve YouTube channels
+    initHlsStreams(container);
     hydrateYouTubeLiveEmbeds(container);
+}
+
+// Initialize HLS.js for video elements with data-hls-src attribute
+function initHlsStreams(rootEl) {
+    if (!rootEl) return;
+    const videos = rootEl.querySelectorAll('video[data-hls-src]');
+    if (!videos.length) return;
+
+    videos.forEach((video) => {
+        const src = video.getAttribute('data-hls-src');
+        if (!src || video.getAttribute('data-hls-initialized')) return;
+        video.setAttribute('data-hls-initialized', '1');
+
+        // Native HLS support (Safari, iOS)
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = src;
+            video.play().catch(() => {});
+        } 
+        // Use HLS.js for other browsers
+        else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+            const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+            hls.loadSource(src);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play().catch(() => {});
+            });
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    console.warn('HLS fatal error:', data.type, data.details);
+                    video.insertAdjacentHTML('afterend', '<div class="error-msg">Stream unavailable</div>');
+                }
+            });
+        } else {
+            video.insertAdjacentHTML('afterend', '<div class="error-msg">HLS not supported in this browser</div>');
+        }
+    });
 }
 
 async function fetchTextViaProxies(url, timeoutMs = 12000) {
@@ -576,8 +627,27 @@ async function fetchTextViaProxies(url, timeoutMs = 12000) {
 
 function extractFirstYouTubeVideoIdFromHtml(html) {
     if (!html) return null;
-    const match = html.match(/watch\?v=([a-zA-Z0-9_-]{11})/);
-    return match ? match[1] : null;
+    
+    // Try multiple patterns to find the live video ID
+    const patterns = [
+        // Canonical URL or og:url with /watch?v=
+        /watch\?v=([a-zA-Z0-9_-]{11})/,
+        // Embed URLs
+        /\/embed\/([a-zA-Z0-9_-]{11})/,
+        // Video ID in JSON-like context
+        /"videoId":\s*"([a-zA-Z0-9_-]{11})"/,
+        // Live broadcast content
+        /"isLiveContent":\s*true.*?"videoId":\s*"([a-zA-Z0-9_-]{11})"/s,
+        // ytInitialPlayerResponse
+        /ytInitialPlayerResponse.*?"videoId":\s*"([a-zA-Z0-9_-]{11})"/s
+    ];
+    
+    for (const pattern of patterns) {
+        const match = html.match(pattern);
+        if (match && match[1]) return match[1];
+    }
+    
+    return null;
 }
 
 async function resolveLiveVideoIdForChannel(channelId) {
@@ -605,18 +675,25 @@ function hydrateYouTubeLiveEmbeds(rootEl) {
         if (iframe.getAttribute('data-yt-live-resolved') === '1') return;
         iframe.setAttribute('data-yt-live-resolved', '1');
 
-        // Resolve in background; if we find a concrete videoId, swap to /embed/<videoId>.
+        // Immediately try to resolve to a concrete videoId for better reliability
         resolveLiveVideoIdForChannel(channelId)
             .then((videoId) => {
-                if (!videoId) return;
+                if (!videoId) {
+                    // No video ID found - channel might not be live
+                    console.log(`No live video found for channel ${channelId}, keeping live_stream embed`);
+                    return;
+                }
                 const originParam = (typeof location !== 'undefined' && location.origin)
                     ? `&origin=${encodeURIComponent(location.origin)}`
                     : '';
                 const desired = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0${originParam}`;
                 if (iframe.src === desired) return;
+                console.log(`Resolved channel ${channelId} to video ${videoId}`);
                 iframe.src = desired;
             })
-            .catch(() => {});
+            .catch((err) => {
+                console.warn(`Failed to resolve live video for channel ${channelId}:`, err);
+            });
     });
 }
 

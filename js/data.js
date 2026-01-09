@@ -330,6 +330,7 @@ export async function fetchCommodities() {
 }
 
 // Fetch flight data from OpenSky Network
+// Prioritizes military, government, and unknown aircraft
 export async function fetchFlightData(bounds = null) {
     try {
         let url = 'https://opensky-network.org/api/states/all';
@@ -343,7 +344,56 @@ export async function fetchFlightData(bounds = null) {
         const data = await response.json();
         if (!data.states) return [];
 
-        return data.states.slice(0, 100).map(state => ({
+        // Military/government callsign prefixes and patterns
+        const militaryPatterns = [
+            /^RCH/i,    // US Air Force (Reach)
+            /^RRR/i,    // US Air Force (tankers)
+            /^DUKE/i,   // US Air Force
+            /^EVAC/i,   // Medical evacuation
+            /^SAM/i,    // Special Air Mission (VIP)
+            /^EXEC/i,   // Executive flights
+            /^AF[0-9]/i, // Air Force One/Two
+            /^NAVY/i,   // US Navy
+            /^TOPCAT/i, // US Navy
+            /^MARLN/i,  // US Marines
+            /^COBRA/i,  // US Army
+            /^ARMY/i,   // US Army
+            /^GUARD/i,  // Coast Guard
+            /^CGR/i,    // Coast Guard
+            /^PAT/i,    // Patrol aircraft
+            /^SPAR/i,   // Special Priority Air Resource
+            /^GRZLY/i,  // Military
+            /^HAWK/i,   // Military
+            /^VIPER/i,  // Military
+            /^NATO/i,   // NATO
+            /^GAF/i,    // German Air Force
+            /^RRF/i,    // French Air Force
+            /^IAM/i,    // Italian Air Force
+            /^AME/i,    // Spanish Air Force
+            /^BAF/i,    // Belgian Air Force
+            /^RNL/i,    // Royal Netherlands Air Force
+            /^PLF/i,    // Polish Air Force
+            /^HUF/i,    // Hungarian Air Force
+            /^CEF/i,    // Czech Air Force
+            /^SVF/i,    // Swedish Air Force
+            /^NOA/i,    // Norwegian Air Force
+            /^FNF/i,    // Finnish Air Force
+            /^DAF/i,    // Danish Air Force
+            /^RFR/i,    // Royal Air Force (UK)
+            /^ASY/i,    // UK Royal Air Force
+            /^CNV/i,    // Canadian Forces
+            /^CFC/i,    // Canadian Forces
+            /^AUF/i,    // Australian Air Force
+            /^NZL/i,    // New Zealand Air Force
+            /^ISR/i,    // Israeli Air Force
+            /^UAF/i,    // Ukrainian Air Force
+            /^RSD/i,    // Russian Air Force
+            /^CCA/i,    // Chinese Air Force
+            /^JASDF/i,  // Japan Air Self-Defense Force
+            /^KAF/i,    // Korean Air Force
+        ];
+
+        const allFlights = data.states.map(state => ({
             icao24: state[0],
             callsign: (state[1] || '').trim(),
             country: state[2],
@@ -354,6 +404,43 @@ export async function fetchFlightData(bounds = null) {
             velocity: state[9],
             onGround: state[8]
         })).filter(f => f.lat && f.lon && !f.onGround);
+
+        // Categorize flights
+        const isMilitaryOrSpecial = (callsign) => {
+            if (!callsign) return false;
+            return militaryPatterns.some(pattern => pattern.test(callsign));
+        };
+
+        const isUnknown = (callsign) => !callsign || callsign.length < 2;
+
+        const isLikelyCommercial = (callsign) => {
+            if (!callsign) return false;
+            // Common airline prefixes
+            const commercialPatterns = [
+                /^UAL/i, /^AAL/i, /^DAL/i, /^SWA/i, /^JBU/i,  // US
+                /^BAW/i, /^EZY/i, /^VIR/i,  // UK
+                /^AFR/i, /^DLH/i, /^KLM/i, /^IBE/i,  // Europe
+                /^UAE/i, /^QTR/i, /^ETD/i,  // Middle East
+                /^CPA/i, /^SIA/i, /^ANA/i, /^JAL/i, /^KAL/i,  // Asia
+                /^QFA/i, /^ANZ/i,  // Oceania
+                /^THY/i, /^ACA/i, /^RYR/i, /^WZZ/i,  // Others
+            ];
+            return commercialPatterns.some(pattern => pattern.test(callsign));
+        };
+
+        // Priority sort: military/govt first, then unknown, then fill with others
+        const military = allFlights.filter(f => isMilitaryOrSpecial(f.callsign));
+        const unknown = allFlights.filter(f => isUnknown(f.callsign) && !isMilitaryOrSpecial(f.callsign));
+        const nonCommercial = allFlights.filter(f => 
+            !isMilitaryOrSpecial(f.callsign) && 
+            !isUnknown(f.callsign) && 
+            !isLikelyCommercial(f.callsign)
+        );
+        const commercial = allFlights.filter(f => isLikelyCommercial(f.callsign));
+
+        // Combine with priority order, limit to 100
+        const prioritized = [...military, ...unknown, ...nonCommercial, ...commercial];
+        return prioritized.slice(0, 100);
     } catch (error) {
         console.error('Error fetching flight data:', error);
         return [];

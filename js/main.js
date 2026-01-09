@@ -1109,9 +1109,9 @@ async function refreshAll() {
 
         const now = new Date();
         if (hadErrors) {
-            setStatusWithErrors(`Updated ${now.toLocaleTimeString()} (some errors)`, true);
+            setStatusWithErrors(`Updated ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })} (some errors)`, true);
         } else {
-            setStatusWithErrors(`Updated ${now.toLocaleTimeString()}`);
+            setStatusWithErrors(`Updated ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
         }
     } catch (error) {
         console.error('Refresh error:', error);

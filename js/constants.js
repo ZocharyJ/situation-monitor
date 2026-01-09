@@ -32,22 +32,14 @@ export const PANELS = {
 
 export const NON_DRAGGABLE_PANELS = ['map', 'tbpn'];
 
-// Live news streams - mix of video IDs and channel-based embeds
+// Live news streams
 export const NEWS_STREAMS = [
-    // Working video IDs
-    { name: 'France 24', type: 'youtube', videoId: 'Ap-UM1O9RBU' },
-    { name: 'Al Jazeera', type: 'youtube', videoId: 'gCNeDWCI0vo' },
     { name: 'Sky News', type: 'youtube', videoId: 'YDvsBbKfLPA' },
     { name: 'Euronews', type: 'youtube', videoId: 'pykpO5kQJ98' },
-    // Channel-based embeds for the rest
+    { name: 'France 24', type: 'youtube-live-channel', channelId: 'UCQfwfsi5VrQ8yKZ-UWmAEFg' },
     { name: 'DW News', type: 'youtube-live-channel', channelId: 'UCknLrEdhRCp1aegoMqRaCZg' },
-    { name: 'CBS News', type: 'youtube-live-channel', channelId: 'UC8p1vwvWtl6T73JiExfWs1g' },
-    { name: 'CGTN', type: 'youtube-live-channel', channelId: 'UCgrNz-aDmcr2uuto8_DL2jg' },
-    { name: 'NBC News', type: 'youtube-live-channel', channelId: 'UCeY0bbntWzzVIaj2z3QigXg' },
-    { name: 'ABC News', type: 'youtube-live-channel', channelId: 'UCBi2mrWuNuyYy4gbM6fU18Q' },
-    { name: 'Reuters', type: 'youtube-live-channel', channelId: 'UChqUTb7kYRX8-EiaN3XFrSQ' },
-    { name: 'BBC News', type: 'youtube-live-channel', channelId: 'UC16niRr50-MSBwiO3YDb3RA' },
-    { name: 'AP News', type: 'youtube-live-channel', channelId: 'UC52X5wxOL_s5yw0dQk7NtgA' }
+    { name: 'Al Jazeera', type: 'youtube-live-channel', channelId: 'UCNye-wNBqNL5ZzHSJj3l8Bg' },
+    { name: 'CGTN', type: 'youtube-live-channel', channelId: 'UCgrNz-aDmcr2uuto8_DL2jg' }
 ];
 
 // Map zoom settings
@@ -56,11 +48,17 @@ export const MAP_ZOOM_MAX = 4;
 export const MAP_ZOOM_STEP = 0.5;
 
 // CORS proxies for fetching external data (multiple for redundancy)
+// Cycle through these when one fails
 export const CORS_PROXIES = [
     'https://corsproxy.io/?',
     'https://api.allorigins.win/raw?url=',
-    'https://cors-anywhere.herokuapp.com/',
-    'https://thingproxy.freeboard.io/fetch/'
+    'https://api.codetabs.com/v1/proxy?quest=',
+    'https://cors.bridged.cc/',
+    'https://crossorigin.me/',
+    'https://cors-anywhere.azm.workers.dev/?',
+    'https://thingproxy.freeboard.io/fetch/',
+    'https://yacdn.org/proxy/',
+    'https://cors-proxy.htmldriven.com/?url='
 ];
 
 // Geopolitical alert keywords

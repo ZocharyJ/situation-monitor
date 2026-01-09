@@ -25,36 +25,49 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css">
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 </head>
 <body>
     <!-- Splash Screen -->
     <div class="splash-screen" id="splashScreen">
         <div class="splash-content">
-            <div class="splash-icon">📡</div>
-        <h1 class="splash-title">QSINTEL SITUATION MONITOR</h1>
-            <div class="splash-subtitle"><em>Originally by <a href="https://github.com/hipcityreg/situation-monitor" target="_blank" rel="noopener noreferrer">Reggie (hipcityreg)</a></em></div>
+            <div class="splash-icon">
+                <svg class="globe-wireframe" viewBox="0 0 100 100" width="80" height="80">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+                    <ellipse cx="50" cy="50" rx="45" ry="18" fill="none" stroke="var(--accent)" stroke-width="0.8"/>
+                    <ellipse cx="50" cy="50" rx="45" ry="18" fill="none" stroke="var(--accent)" stroke-width="0.8" transform="rotate(60 50 50)"/>
+                    <ellipse cx="50" cy="50" rx="45" ry="18" fill="none" stroke="var(--accent)" stroke-width="0.8" transform="rotate(120 50 50)"/>
+                    <ellipse cx="50" cy="50" rx="18" ry="45" fill="none" stroke="var(--accent)" stroke-width="0.8"/>
+                    <line x1="5" y1="50" x2="95" y2="50" stroke="var(--accent)" stroke-width="0.5"/>
+                    <ellipse cx="50" cy="30" rx="38" ry="12" fill="none" stroke="var(--accent)" stroke-width="0.5"/>
+                    <ellipse cx="50" cy="70" rx="38" ry="12" fill="none" stroke="var(--accent)" stroke-width="0.5"/>
+                </svg>
+            </div>
+        <h1 class="splash-title">QUIETSECTOR INTEL MONITOR</h1>
+            <div class="splash-subtitle"><em>Forked from <a href="https://github.com/hipcityreg/situation-monitor" target="_blank" rel="noopener noreferrer">Reggie (hipcityreg)</a></em></div>
             <div class="splash-loader"></div>
             <div class="splash-status" id="splashStatus">Initializing...</div>
+            <div class="splash-footer">Contact: <a href="mailto:qsintel@pm.me">qsintel@pm.me</a></div>
         </div>
     </div>
 
     <header class="header">
         <div class="header-left">
             <div class="title-block">
-                <h1 class="title">Quiet Sector Monitoring</h1>
-                <div class="title-subtitle"><em>Originally by <a href="https://github.com/hipcityreg/situation-monitor" target="_blank" rel="noopener noreferrer">Reggie (hipcityreg)</a></em></div>
+                <h1 class="title">Quiet Sector</h1>
+                <div class="title-subtitle"><em>Forked from <a href="https://github.com/hipcityreg/situation-monitor" target="_blank" rel="noopener noreferrer">Reggie (hipcityreg)</a></em></div>
             </div>
             <input type="text" id="globalSearch" class="search-box" placeholder="Search..." oninput="handleGlobalSearch(this.value)">
             <div class="time-filter-wrapper">
                 <button class="header-btn time-filter-btn" id="timeFilterBtn" onclick="toggleTimeFilter()" title="Filter by time">
-                    12 Hours
+                   12 Hours
                 </button>
                 <div class="time-filter-dropdown" id="timeFilterDropdown">
-                    <button class="time-option" data-time="all" onclick="setTimeFilter('all')">All Time</button>
                     <button class="time-option" data-time="1h" onclick="setTimeFilter('1h')">Last Hour</button>
                     <button class="time-option" data-time="6h" onclick="setTimeFilter('6h')">Last 6 Hours</button>
                     <button class="time-option active" data-time="12h" onclick="setTimeFilter('12h')">Last 12 Hours</button>
                     <button class="time-option" data-time="24h" onclick="setTimeFilter('24h')">Last 24 Hours</button>
+                    <button class="time-option time-clear" data-time="all" onclick="setTimeFilter('all')">✕ Clear Filter</button>
                 </div>
             </div>
         </div>
@@ -62,7 +75,7 @@
             <span class="status" id="status" title="">Ready</span>
             <button class="header-btn alert-btn" id="alertsBtn" onclick="toggleAlerts()">Alerts</button>
             <button class="header-btn" onclick="toggleSettings()">Settings</button>
-            <button class="header-btn refresh-btn" onclick="refreshAll()">Refresh <span class="countdown" id="countdown">5:00</span></button>
+            <button class="header-btn refresh-btn" onclick="refreshAll()"><span class="refresh-text">Refresh</span> <span class="countdown" id="countdown">5:00</span></button>
         </div>
     </header>
 
@@ -137,10 +150,10 @@
                             <button class="region-btn active" data-region="all" onclick="setRegionFilter('all')">All</button>
                             <button class="region-btn" data-region="us" onclick="setRegionFilter('us')">US</button>
                             <button class="region-btn" data-region="europe" onclick="setRegionFilter('europe')">EU</button>
-                            <button class="region-btn" data-region="asia" onclick="setRegionFilter('asia')">Asia</button>
-                            <button class="region-btn" data-region="mideast" onclick="setRegionFilter('mideast')">ME</button>
-                            <button class="region-btn" data-region="russia" onclick="setRegionFilter('russia')">RU</button>
                             <button class="region-btn" data-region="ukraine" onclick="setRegionFilter('ukraine')">UA</button>
+                            <button class="region-btn" data-region="russia" onclick="setRegionFilter('russia')">RU</button>
+                            <button class="region-btn" data-region="mideast" onclick="setRegionFilter('mideast')">ME</button>
+                            <button class="region-btn" data-region="asia" onclick="setRegionFilter('asia')">Asia</button>
                             <span class="layer-divider">|</span>
                             <button class="layer-toggle-btn active" data-layer="earthquakes" onclick="toggleMapLayer('earthquakes')" title="Toggle Disasters">Disasters</button>
                             <button class="layer-toggle-btn" id="flightsToggle" data-layer="flights" onclick="toggleMapLayer('flights')" title="Select a region to view flight data">Flights: Disabled</button>
@@ -446,13 +459,12 @@
             </div>
 
         </div>
-    </div>
 
-    <!-- Ticker -->
-    <footer class="news-ticker" id="newsTicker">
-        <div class="ticker-label">BREAKING</div>
-        <div class="ticker-content"><div class="ticker-track" id="tickerTrack"></div></div>
-    </footer>
+        <!-- Footer (scrolls with content, above ticker) -->
+        <footer class="site-footer">
+            <span>Contact: <a href="mailto:qsintel@pm.me">qsintel@pm.me</a></span>
+        </footer>
+    </div>
 
     <!-- Notification Container (bottom right popups) -->
     <div class="notification-container" id="notificationContainer"></div>
@@ -460,6 +472,12 @@
     <!-- Hidden panels -->
     <div style="display:none">
         <div id="mainCharPanel"></div><div id="venezuelaPanel"></div><div id="greenlandPanel"></div><div id="monitorsPanel"></div>
+    </div>
+
+    <!-- Ticker (pinned to bottom) -->
+    <div class="news-ticker" id="newsTicker">
+        <div class="ticker-label">BREAKING</div>
+        <div class="ticker-content"><div class="ticker-track" id="tickerTrack"></div></div>
     </div>
 
     <script>
